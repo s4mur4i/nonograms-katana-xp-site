@@ -549,9 +549,14 @@ function renderCredits() {
       <p style="color:var(--muted);font-size:12px">generated ${esc(d.generated)} · counts = nonograms each person added</p>
       ${d.lists.map(l => {
         const cur = l.curators.length ? ` <span style="color:var(--muted);font-weight:400">· curated by ${l.curators.map(esc).join(', ')}</span>` : '';
-        const rows = l.contributors.map(c => `<li><span>${esc(c.name)}</span><span>${c.count.toLocaleString()}</span></li>`).join('');
+        const contrib = l.contributors.map(c => `<li><span>${esc(c.name)}</span><span>${c.count.toLocaleString()} nonograms</span></li>`).join('');
+        const contribNames = new Set(l.contributors.map(c => c.name));
+        const commenters = (l.commenters || []).filter(c => !contribNames.has(c.name))
+          .map(c => `<li><span>${esc(c.name)}</span><span>${c.count.toLocaleString()} comments</span></li>`).join('');
         return `<div class="cred"><h3>${esc(l.name)} <span style="color:var(--muted);font-weight:400">(${esc(l.desc)})</span>${cur}</h3>
-          <ul>${rows}</ul>
+          <div style="color:var(--muted);font-size:12px;margin:4px 0 0">added nonograms</div>
+          <ul>${contrib}</ul>
+          ${commenters ? `<div style="color:var(--muted);font-size:12px;margin:6px 0 0">also wrote comments</div><ul>${commenters}</ul>` : ''}
           <div class="tot">${l.total.toLocaleString()} nonograms</div></div>`;
       }).join('')}
     </div>`;
