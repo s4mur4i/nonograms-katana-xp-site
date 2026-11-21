@@ -126,6 +126,16 @@
         <option value="239132">list index</option>
         <option value="none">not on a list</option>
       </select></label>
+      <label>wiki list <select id="wiki">
+        <option value="">any</option>
+        <option value="xpc">XP color (3k+)</option>
+        <option value="xpbw">XP B/W (&gt;2k)</option>
+        <option value="xpco25">XP color other (2.5–3k)</option>
+        <option value="xpco0">XP color other (&lt;2.5k)</option>
+        <option value="xpbwo">XP B/W other</option>
+        <option value="mp60">Easy 60 MP</option>
+        <option value="mpo">Easy other</option>
+      </select></label>
       <button id="reset">reset</button>
     </div>
     <div class="controls" id="done-controls">
@@ -192,6 +202,7 @@ const PAGE = 200;
 const SIZES = [40,45,50,55,60,65,70,75,80];
 const TYPE_SHORT = { true:'true', hard:'hard', medi:'medi', symmetry:'sym', 'coloring-few':'col-few', 'coloring-lot':'col-lot', mosaic:'mosaic' };
 const CAT_NAMES = {1:"Around",2:"Egypt",3:"Science",4:"Japan",5:"Kawaii",6:"Anime",7:"Cartoon",8:"Movies",9:"Video",10:"Flags",11:"Fantasy",12:"Fiction",13:"Super",14:"Unreal",15:"Dragons",16:"Adventures",17:"Ships",18:"Pirates",19:"Games",20:"Music",21:"Animals",22:"Birds",23:"Cats",24:"Dogs",25:"Fish",26:"Insects",27:"Plants",28:"Flowers",29:"People",30:"Painting",31:"Nature",32:"Houses",33:"Designs",34:"Photorealism",35:"Transport",36:"Space",37:"Twilight",38:"Love",39:"Smiles",40:"Holidays",41:"Symbols",43:"Horoscope",44:"Food",45:"Clothes",46:"Objects",47:"Machines",48:"Sport",49:"Weapons",50:"History"};
+const WIKI_LISTS = {xpc:"XP color (3k+)",xpbw:"XP B/W (>2k)",xpco25:"XP color other (2.5–3k)",xpco0:"XP color other (<2.5k)",xpbwo:"XP B/W other",mp60:"Easy 60 MP",mpo:"Easy other"};
 
 function fillOpts(sel, items, value) {
   items.forEach(([v, label]) => { const o = document.createElement('option'); o.value = v; o.textContent = label; if (String(v) === String(value)) o.selected = true; sel.appendChild(o); });
@@ -242,6 +253,8 @@ function where() {
   if (lst === 'any-list') cond.push("groups IS NOT NULL AND groups != ''");
   else if (lst === 'none') cond.push("(groups IS NULL OR groups = '')");
   else if (lst) { cond.push("(','||groups||',') LIKE '%,'||?||',%'"); p.push(lst); }
+  const wiki = document.getElementById('wiki').value;
+  if (wiki) { cond.push("(','||wiki_lists||',') LIKE '%,'||?||',%'"); p.push(wiki); }
   const done = document.getElementById('done').value;
   if (done === 'hide') cond.push("NOT EXISTS (SELECT 1 FROM done d WHERE d.id = puzzles.id)");
   else if (done === 'only') cond.push("EXISTS (SELECT 1 FROM done d WHERE d.id = puzzles.id)");
@@ -364,12 +377,13 @@ document.getElementById('reset').onclick = () => {
   document.getElementById('cmin').value = ''; document.getElementById('cmax').value = '';
   document.getElementById('xp').value = ''; document.getElementById('type').value = '';
   document.getElementById('cat').value = ''; document.getElementById('list').value = '';
+  document.getElementById('wiki').value = '';
   document.getElementById('done').value = '';
   document.getElementById('sort').value = 'id';
   authorFilter = null;
   refresh();
 };
-['q','min','max','color','cmin','cmax','xp','type','cat','list','sort','done'].forEach(id =>
+['q','min','max','color','cmin','cmax','xp','type','cat','list','wiki','sort','done'].forEach(id =>
   document.getElementById(id).addEventListener('change', refresh));
 document.getElementById('q').addEventListener('input', debounce(refresh, 250));
 
@@ -385,6 +399,7 @@ function openDetail(r) {
   if (r.xp_range) f.push(['xp range', r.xp_range]);
   if (r.cat1 != null) f.push(['categories', [r.cat1, r.cat2].filter(x => x).map(x => CAT_NAMES[x] || x).join(', ')]);
   if (r.groups) f.push(['lists', r.groups]);
+  if (r.wiki_lists) f.push(['wiki lists', r.wiki_lists.split(',').map(x => WIKI_LISTS[x] || x).join(', ')]);
   f.push(['last seen', fmt(r.last_seen)]);
   document.getElementById('d_copy').onclick = () => copyText('#' + r.id);
   document.getElementById('d_done').textContent = doneSet.has(r.id) ? 'unmark done' : 'mark done';
