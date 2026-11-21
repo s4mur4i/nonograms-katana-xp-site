@@ -112,10 +112,14 @@
         <option value="unknown">unknown</option>
       </select></label>
       <label>type <select id="type">
-        <option value="">any</option><option value="true">true</option><option value="hard">hard</option>
-        <option value="medi">medi</option><option value="symmetry">symmetry</option>
-        <option value="coloring">coloring</option><option value="mosaic">mosaic</option>
-        <option value="unknown">unknown</option>
+        <option value="">any</option>
+        <option value="True Nonogram">True Nonogram</option>
+        <option value="Few trivial lines">Few trivial lines</option>
+        <option value="Contradictions method">Contradictions method</option>
+        <option value="Symmetry (95%)">Symmetry (95%)</option>
+        <option value="coloring">Coloring</option>
+        <option value="Mosaic (small segments)">Mosaic</option>
+        <option value="not marked">not marked</option>
       </select></label>
       <label>category <select id="cat"><option value="">any</option></select></label>
       <label>list <select id="list">
@@ -267,13 +271,8 @@ function where() {
   if (xp === 'unknown') cond.push("xp_range IS NULL");
   else if (xp) { cond.push("xp_range = ?"); p.push(xp); }
   const type = document.getElementById('type').value;
-  if (type === 'true') cond.push("type = 'true'");
-  else if (type === 'hard') cond.push("type = 'hard'");
-  else if (type === 'medi') cond.push("type = 'medi'");
-  else if (type === 'symmetry') cond.push("type = 'symmetry'");
-  else if (type === 'coloring') cond.push("type IN ('coloring-few','coloring-lot')");
-  else if (type === 'mosaic') cond.push("type = 'mosaic'");
-  else if (type === 'unknown') cond.push("type = 'unknown'");
+  if (type === 'coloring') cond.push("type IN ('Coloring (few colors)','Coloring (many colors)')");
+  else if (type) { cond.push("type = ?"); p.push(type); }
   const cat = document.getElementById('cat').value;
   if (cat) { cond.push("(cat1 = ? OR cat2 = ?)"); p.push(+cat, +cat); }
   const lst = document.getElementById('list').value;
