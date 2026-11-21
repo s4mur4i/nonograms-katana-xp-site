@@ -32,6 +32,12 @@
   .tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; background:#1c2330; color:var(--accent); }
   .tag.true { background:#12301f; color:#7ee2a8; }
   .tag.hard { background:#30120f; color:#e29a7e; }
+  td.done-cell { text-align:center; padding:0; width:30px; }
+  .done-check { width:16px; height:16px; cursor:pointer; accent-color:var(--accent); vertical-align:middle; }
+  .done-badge { display:inline-block; margin-left:6px; padding:0 6px; border-radius:4px; font-size:11px; background:#12301f; color:#7ee2a8; }
+  #done-controls { border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
+  #done-note { color:var(--muted); font-size:12px; }
+  #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--accent); color:var(--text); padding:8px 14px; border-radius:8px; display:none; z-index:30; max-width:90vw; }
   #more { margin:14px 0; width:100%; }
   #stats-view { display:none; margin-top:10px; }
   #stats-view .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
@@ -107,6 +113,15 @@
       </select></label>
       <button id="reset">reset</button>
     </div>
+    <div class="controls" id="done-controls">
+      <label>done <select id="done">
+        <option value="">all</option><option value="hide">hide done</option><option value="only">done only</option>
+      </select></label>
+      <button id="export-done">export</button>
+      <button id="import-btn">import</button>
+      <input type="file" id="import-done" accept=".json,application/json" style="display:none">
+      <span id="done-note"></span>
+    </div>
   </div>
 </header>
 <div class="banner" id="banner"></div>
@@ -116,6 +131,7 @@
     <div class="table-wrap">
       <table>
         <thead><tr>
+          <th class="done-cell">✓</th>
           <th>id</th><th>name</th><th>author</th><th>size</th>
           <th>type</th><th class="num">colors</th><th class="num">fill</th>
         </tr></thead>
@@ -131,15 +147,20 @@
   <h2 id="d_name"></h2>
   <div class="alt" id="d_alt"></div>
   <p style="margin:2px 0 8px"><button id="d_copy">copy #id</button>
+  <button id="d_done">mark done</button>
   <span style="color:var(--muted);font-size:12px">paste into the app's search funnel</span></p>
   <dl id="d_fields"></dl>
 </div></div>
+<div id="toast"></div>
 <footer>Metadata only — no solutions, clues or images are published. Sources: the app's own
 catalogue; see docs/LEGAL.md.</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
 <script>
 let db = null, page = 0, view = 'browse', authorFilter = null;
+let doneSet = new Set();
+let doneMeta = { lastExportedCount: 0, lastExportedAt: null };
+let toastT;
 const PAGE = 200;
 const SIZES = [40,45,50,55,60,65,70,75,80];
 const TYPE_SHORT = { true:'true', hard:'hard', medi:'medi', symmetry:'sym', 'coloring-few':'col-few', 'coloring-lot':'col-lot', mosaic:'mosaic' };
@@ -155,8 +176,10 @@ fillOpts(document.getElementById('cmax'), [['', 'any']].concat([...Array(12)].ma
 fillOpts(document.getElementById('cat'), [['', 'any']].concat(Object.keys(CAT_NAMES).sort((a,b)=>a-b).map(k => [k, k + ' · ' + CAT_NAMES[k]])), '');
 
 initSqlJs({ locateFile: f => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${f}` })
-  .then(SQL => fetch('./public.db').then(r => r.arrayBuffer()).then(buf => {
-    db = new SQL.Database(new Uint8Array(buf)); refresh();
+  .then(SQL => fetch('./public.db').then(r => r.arrayBuffer()).then(async buf => {
+    db = new SQL.Database(new Uint8Array(buf));
+    await loadDone();
+    refresh();
   }))
   .catch(e => { document.getElementById('stats').textContent = 'failed to load: ' + e; });
 
@@ -192,6 +215,9 @@ function where() {
   if (lst === 'any-list') cond.push("groups IS NOT NULL AND groups != ''");
   else if (lst === 'none') cond.push("(groups IS NULL OR groups = '')");
   else if (lst) { cond.push("(','||groups||',') LIKE '%,'||?||',%'"); p.push(lst); }
+  const done = document.getElementById('done').value;
+  if (done === 'hide') cond.push("NOT EXISTS (SELECT 1 FROM done d WHERE d.id = puzzles.id)");
+  else if (done === 'only') cond.push("EXISTS (SELECT 1 FROM done d WHERE d.id = puzzles.id)");
   if (authorFilter) { cond.push("author = ?"); p.push(authorFilter); }
   return { sql: 'WHERE ' + cond.join(' AND '), p };
 }
@@ -216,7 +242,7 @@ function refresh() {
         SUM(CASE WHEN color IS NULL THEN 1 ELSE 0 END) u
         FROM puzzles ${sql}`, p)[0];
   document.getElementById('stats').textContent =
-    `${s.n.toLocaleString()} puzzles · ${s.c.toLocaleString()} colour · ${s.b.toLocaleString()} B/W · ${s.u.toLocaleString()} unknown`;
+    `${s.n.toLocaleString()} puzzles · ${s.c.toLocaleString()} colour · ${s.b.toLocaleString()} B/W · ${s.u.toLocaleString()} unknown · ${doneSet.size.toLocaleString()} done`;
   document.getElementById('banner').style.display = authorFilter ? 'block' : 'none';
   document.getElementById('banner').innerHTML =
     authorFilter ? `filtering by author <b>${esc(authorFilter)}</b> <button onclick="clearAuthor()">clear</button>` : '';
@@ -236,8 +262,9 @@ function render() {
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML =
+      `<td class="done-cell"><input type="checkbox" class="done-check" ${doneSet.has(r.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleDone(${r.id})"></td>` +
       `<td class="num">${r.id}</td>` +
-      `<td class="name">${esc(r.name)}${r.alt_name ? ` <span class="tag">${esc(r.alt_name)}</span>` : ''}</td>` +
+      `<td class="name">${esc(r.name)}${r.alt_name ? ` <span class="tag">${esc(r.alt_name)}</span>` : ''}${doneSet.has(r.id) ? ' <span class="done-badge">✓</span>' : ''}</td>` +
       `<td><a class="author" onclick="event.stopPropagation();filterAuthor('${escAttr(r.author)}')">${esc(r.author)}</a></td>` +
       `<td class="num">${r.w}×${r.h}</td>` +
       `<td>${typeCell(r.type)}</td>` +
@@ -305,11 +332,12 @@ document.getElementById('reset').onclick = () => {
   document.getElementById('cmin').value = ''; document.getElementById('cmax').value = '';
   document.getElementById('xp').value = ''; document.getElementById('type').value = '';
   document.getElementById('cat').value = ''; document.getElementById('list').value = '';
+  document.getElementById('done').value = '';
   document.getElementById('sort').value = 'id';
   authorFilter = null;
   refresh();
 };
-['q','min','max','color','cmin','cmax','xp','type','cat','list','sort'].forEach(id =>
+['q','min','max','color','cmin','cmax','xp','type','cat','list','sort','done'].forEach(id =>
   document.getElementById(id).addEventListener('change', refresh));
 document.getElementById('q').addEventListener('input', debounce(refresh, 250));
 
@@ -327,12 +355,103 @@ function openDetail(r) {
   if (r.groups) f.push(['lists', r.groups]);
   f.push(['last seen', fmt(r.last_seen)]);
   document.getElementById('d_copy').onclick = () => copyText('#' + r.id);
+  document.getElementById('d_done').textContent = doneSet.has(r.id) ? 'unmark done' : 'mark done';
+  document.getElementById('d_done').onclick = () => { toggleDone(r.id); closeDetail(); };
   document.getElementById('d_fields').innerHTML =
     f.map(([k, v]) => `<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join('');
   document.getElementById('detail').classList.add('open');
 }
 function closeDetail() { document.getElementById('detail').classList.remove('open'); }
 document.getElementById('detail').addEventListener('click', e => { if (e.target.id === 'detail') closeDetail(); });
+
+// ---- done tracking (IndexedDB) ----
+let idbPromise = null;
+function openDB() {
+  if (idbPromise) return idbPromise;
+  idbPromise = new Promise((res, rej) => {
+    const req = indexedDB.open('nk-done', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  return idbPromise;
+}
+function kvGet(key) {
+  return openDB().then(db => new Promise((res, rej) => {
+    const t = db.transaction('kv').objectStore('kv').get(key);
+    t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
+  }));
+}
+function kvSet(key, val) {
+  return openDB().then(db => new Promise((res, rej) => {
+    const t = db.transaction('kv', 'readwrite').objectStore('kv').put(val, key);
+    t.onsuccess = () => res(); t.onerror = () => rej(t.error);
+  }));
+}
+async function loadDone() {
+  try {
+    const st = await kvGet('state');
+    if (st && Array.isArray(st.done)) doneSet = new Set(st.done.map(Number).filter(Number.isInteger));
+    if (st) doneMeta = { lastExportedCount: st.lastExportedCount || 0, lastExportedAt: st.lastExportedAt || null };
+  } catch (e) {}
+  syncDoneTable();
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  updateDoneNote();
+}
+function persistDone() {
+  return kvSet('state', { done: [...doneSet], lastExportedCount: doneMeta.lastExportedCount, lastExportedAt: doneMeta.lastExportedAt });
+}
+function syncDoneTable() {
+  if (!db) return;
+  db.run("CREATE TEMP TABLE IF NOT EXISTS done(id INTEGER PRIMARY KEY)");
+  db.run("DELETE FROM done");
+  const st = db.prepare("INSERT INTO done VALUES (?)");
+  for (const id of doneSet) { st.bind([id]); st.step(); st.reset(); }
+  st.free();
+}
+function toggleDone(id) {
+  if (doneSet.has(id)) doneSet.delete(id); else doneSet.add(id);
+  persistDone(); syncDoneTable(); updateDoneNote(); refresh();
+}
+function exportDone() {
+  const payload = { version: 1, done: [...doneSet].sort((a, b) => a - b), exported_at: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'nonograms-done.json'; a.click();
+  URL.revokeObjectURL(url);
+  doneMeta.lastExportedCount = doneSet.size; doneMeta.lastExportedAt = Date.now();
+  persistDone(); updateDoneNote(); toast('exported ' + doneSet.size + ' done puzzles');
+}
+function importDone(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      const ids = (Array.isArray(d.done) ? d.done : []).map(Number).filter(n => Number.isInteger(n) && n > 0);
+      doneSet = new Set(ids);   // REPLACE: import is a full set
+      doneMeta.lastExportedCount = ids.length; doneMeta.lastExportedAt = Date.now();
+      persistDone(); syncDoneTable(); updateDoneNote(); refresh();
+      toast('imported ' + doneSet.size + ' done (replaced)');
+    } catch (e) { toast('import failed: ' + e.message); }
+  };
+  r.readAsText(file);
+}
+function updateDoneNote() {
+  const el = document.getElementById('done-note');
+  const unsaved = doneSet.size - doneMeta.lastExportedCount;
+  let t = doneSet.size ? doneSet.size.toLocaleString() + ' done' : '';
+  if (unsaved >= 20) t += (t ? ' · ' : '') + unsaved + ' unsaved — export your progress';
+  el.textContent = t;
+}
+function toast(msg) {
+  const el = document.getElementById('toast'); el.textContent = msg; el.style.display = 'block';
+  clearTimeout(toastT); toastT = setTimeout(() => el.style.display = 'none', 2500);
+}
+document.getElementById('export-done').onclick = exportDone;
+document.getElementById('import-btn').onclick = () => document.getElementById('import-done').click();
+document.getElementById('import-done').addEventListener('change', e => {
+  const f = e.target.files[0]; if (f) importDone(f); e.target.value = '';
+});
 
 function copyText(t) {
   if (navigator.clipboard) { navigator.clipboard.writeText(t); return; }
