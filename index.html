@@ -47,6 +47,13 @@
   #cart-note { color:var(--muted); font-size:12px; }
   #more { margin:14px 0; width:100%; }
   #stats-view { display:none; margin-top:10px; }
+  #credits-view { display:none; margin-top:10px; }
+  #credits-view .cred { border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin:10px 0; }
+  #credits-view .cred h3 { margin:0; font-size:14px; }
+  #credits-view .cred ul { list-style:none; margin:6px 0 0; padding:0; }
+  #credits-view .cred li { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid var(--line); max-width:420px; }
+  #credits-view .cred li span:last-child { color:var(--muted); font-variant-numeric:tabular-nums; }
+  #credits-view .tot { color:var(--muted); font-size:12px; margin-top:6px; }
   #stats-view .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
   #stats-view h3 { font-size:13px; color:var(--muted); margin:14px 0 4px; text-transform:uppercase; letter-spacing:.04em; }
   #stats-view ul { list-style:none; margin:0; padding:0; }
@@ -79,6 +86,7 @@
   <div class="nav">
     <button id="nav-browse" class="active">Browse</button>
     <button id="nav-stats">Stats</button>
+    <button id="nav-credits">Credits</button>
   </div>
   <div id="browse-controls">
     <div class="controls">
@@ -157,6 +165,7 @@
     <button id="more" style="display:none">load more</button>
   </div>
   <div id="stats-view"></div>
+  <div id="credits-view"></div>
 </main>
 <div id="detail"><div class="card">
   <button class="close" onclick="closeDetail()">×</button>
@@ -333,16 +342,20 @@ function setView(v) {
   view = v;
   document.getElementById('nav-browse').classList.toggle('active', v === 'browse');
   document.getElementById('nav-stats').classList.toggle('active', v === 'stats');
+  document.getElementById('nav-credits').classList.toggle('active', v === 'credits');
   document.getElementById('browse-controls').style.display = v === 'browse' ? '' : 'none';
   document.getElementById('browse-view').style.display = v === 'browse' ? '' : 'none';
   document.getElementById('stats-view').style.display = v === 'stats' ? 'block' : 'none';
+  document.getElementById('credits-view').style.display = v === 'credits' ? 'block' : 'none';
   document.getElementById('banner').style.display = 'none';
   document.getElementById('more').style.display = 'none';
+  if (v === 'credits') { loadCredits().then(renderCredits); return; }
   refresh();
 }
 
 document.getElementById('nav-browse').onclick = () => setView('browse');
 document.getElementById('nav-stats').onclick = () => setView('stats');
+document.getElementById('nav-credits').onclick = () => setView('credits');
 document.getElementById('more').onclick = render;
 document.getElementById('reset').onclick = () => {
   document.getElementById('q').value = '';
@@ -520,6 +533,29 @@ document.getElementById('cart-toggle').onclick = () => {
 document.getElementById('cart-copy').onclick = copySearchList;
 document.getElementById('cart-comment').onclick = copyCommentList;
 document.getElementById('cart-clear').onclick = () => { cart.clear(); renderCart(); refresh(); };
+
+// ---- credits ----
+let creditsData = null;
+function loadCredits() {
+  if (creditsData) return Promise.resolve(creditsData);
+  return fetch('./credits.json').then(r => r.json()).then(d => { creditsData = d; return d; });
+}
+function renderCredits() {
+  document.getElementById('stats').textContent = 'credits';
+  const d = creditsData;
+  document.getElementById('credits-view').innerHTML =
+    `<div style="max-width:780px">
+      <p style="color:var(--muted)">${esc(d.disclaimer)}</p>
+      <p style="color:var(--muted);font-size:12px">generated ${esc(d.generated)} · counts = nonograms each person added</p>
+      ${d.lists.map(l => {
+        const cur = l.curators.length ? ` <span style="color:var(--muted);font-weight:400">· curated by ${l.curators.map(esc).join(', ')}</span>` : '';
+        const rows = l.contributors.map(c => `<li><span>${esc(c.name)}</span><span>${c.count.toLocaleString()}</span></li>`).join('');
+        return `<div class="cred"><h3>${esc(l.name)} <span style="color:var(--muted);font-weight:400">(${esc(l.desc)})</span>${cur}</h3>
+          <ul>${rows}</ul>
+          <div class="tot">${l.total.toLocaleString()} nonograms</div></div>`;
+      }).join('')}
+    </div>`;
+}
 
 function copyText(t) {
   if (navigator.clipboard) { navigator.clipboard.writeText(t); return; }
