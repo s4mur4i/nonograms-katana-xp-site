@@ -131,7 +131,8 @@
     </div>
     <div class="controls" id="cart-controls">
       <button id="cart-toggle">list (0)</button>
-      <button id="cart-copy">copy full list</button>
+      <button id="cart-copy">copy (search)</button>
+      <button id="cart-comment">copy (comment)</button>
       <button id="cart-clear">clear</button>
       <span id="cart-note"></span>
     </div>
@@ -495,12 +496,18 @@ function renderCart() {
     : '<div style="color:var(--muted)">empty — click ＋ on any puzzle to add it</div>';
   const parts = cart.size ? cartParts().length : 0;
   document.getElementById('cart-note').textContent = cart.size
-    ? (parts > 1 ? parts + ' parts when copied (≤1024 chars each)' : '1 part when copied')
+    ? cart.size + ' ids' + (parts > 1 ? ' · ' + parts + ' comment parts' : '')
     : '';
 }
 function toggleCart(id, name) { cart.has(id) ? cart.delete(id) : cart.set(id, name); renderCart(); }
 function removeFromCart(id) { cart.delete(id); renderCart(); refresh(); }
-function copyFullList() {
+function copySearchList() {
+  if (!cart.size) { toast('list is empty'); return; }
+  const text = [...cart.keys()].sort((a, b) => a - b).map(id => '#' + id).join(';');
+  copyText(text);
+  toast('copied ' + cart.size + ' ids (search filter format)');
+}
+function copyCommentList() {
   if (!cart.size) { toast('list is empty'); return; }
   const parts = cartParts();
   copyText(parts.join('\n\n'));
@@ -510,7 +517,8 @@ document.getElementById('cart-toggle').onclick = () => {
   const p = document.getElementById('cart-panel');
   p.style.display = p.style.display === 'block' ? 'none' : 'block';
 };
-document.getElementById('cart-copy').onclick = copyFullList;
+document.getElementById('cart-copy').onclick = copySearchList;
+document.getElementById('cart-comment').onclick = copyCommentList;
 document.getElementById('cart-clear').onclick = () => { cart.clear(); renderCart(); refresh(); };
 
 function copyText(t) {
