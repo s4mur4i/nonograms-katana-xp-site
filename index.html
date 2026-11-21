@@ -38,6 +38,13 @@
   #done-controls { border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
   #done-note { color:var(--muted); font-size:12px; }
   #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--accent); color:var(--text); padding:8px 14px; border-radius:8px; display:none; z-index:30; max-width:90vw; }
+  .add-cell { text-align:center; width:34px; padding:0; }
+  .add-btn { border:none; background:none; color:var(--accent); font-size:17px; cursor:pointer; padding:0 2px; line-height:1; }
+  #cart-controls { border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
+  #cart-panel { margin:8px 20px 0; padding:8px 12px; background:#10141c; border:1px solid var(--line); border-radius:8px; max-height:260px; overflow:auto; display:none; }
+  #cart-panel .cart-item { display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px solid var(--line); }
+  #cart-panel .cart-item button { border:none; background:none; color:var(--muted); cursor:pointer; font-size:16px; }
+  #cart-note { color:var(--muted); font-size:12px; }
   #more { margin:14px 0; width:100%; }
   #stats-view { display:none; margin-top:10px; }
   #stats-view .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
@@ -122,9 +129,16 @@
       <input type="file" id="import-done" accept=".json,application/json" style="display:none">
       <span id="done-note"></span>
     </div>
+    <div class="controls" id="cart-controls">
+      <button id="cart-toggle">list (0)</button>
+      <button id="cart-copy">copy full list</button>
+      <button id="cart-clear">clear</button>
+      <span id="cart-note"></span>
+    </div>
   </div>
 </header>
 <div class="banner" id="banner"></div>
+<div id="cart-panel"></div>
 <div class="stats" id="stats">loading…</div>
 <main>
   <div id="browse-view">
@@ -134,6 +148,7 @@
           <th class="done-cell">✓</th>
           <th>id</th><th>name</th><th>author</th><th>size</th>
           <th>type</th><th class="num">colors</th><th class="num">fill</th>
+          <th class="add-cell">＋</th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
@@ -148,6 +163,7 @@
   <div class="alt" id="d_alt"></div>
   <p style="margin:2px 0 8px"><button id="d_copy">copy #id</button>
   <button id="d_done">mark done</button>
+  <button id="d_cart">add to list</button>
   <span style="color:var(--muted);font-size:12px">paste into the app's search funnel</span></p>
   <dl id="d_fields"></dl>
 </div></div>
@@ -160,6 +176,7 @@ catalogue; see docs/LEGAL.md.</footer>
 let db = null, page = 0, view = 'browse', authorFilter = null;
 let doneSet = new Set();
 let doneMeta = { lastExportedCount: 0, lastExportedAt: null };
+let cart = new Map();   // id -> name (list builder)
 let toastT;
 const PAGE = 200;
 const SIZES = [40,45,50,55,60,65,70,75,80];
@@ -269,7 +286,8 @@ function render() {
       `<td class="num">${r.w}×${r.h}</td>` +
       `<td>${typeCell(r.type)}</td>` +
       `<td class="num">${r.color == null ? '–' : r.colors}</td>` +
-      `<td class="num">${r.fill_pct == null ? '–' : r.fill_pct.toFixed(1) + '%'}</td>`;
+      `<td class="num">${r.fill_pct == null ? '–' : r.fill_pct.toFixed(1) + '%'}</td>` +
+      `<td class="add-cell"><button class="add-btn" onclick="event.stopPropagation(); toggleCart(${r.id}, '${escAttr(r.name)}')">${cart.has(r.id) ? '−' : '＋'}</button></td>`;
     tr.onclick = () => openDetail(r);
     tbody.appendChild(tr);
   });
@@ -357,6 +375,11 @@ function openDetail(r) {
   document.getElementById('d_copy').onclick = () => copyText('#' + r.id);
   document.getElementById('d_done').textContent = doneSet.has(r.id) ? 'unmark done' : 'mark done';
   document.getElementById('d_done').onclick = () => { toggleDone(r.id); closeDetail(); };
+  document.getElementById('d_cart').textContent = cart.has(r.id) ? 'remove from list' : 'add to list';
+  document.getElementById('d_cart').onclick = () => {
+    toggleCart(r.id, r.name);
+    document.getElementById('d_cart').textContent = cart.has(r.id) ? 'remove from list' : 'add to list';
+  };
   document.getElementById('d_fields').innerHTML =
     f.map(([k, v]) => `<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join('');
   document.getElementById('detail').classList.add('open');
@@ -452,6 +475,43 @@ document.getElementById('import-btn').onclick = () => document.getElementById('i
 document.getElementById('import-done').addEventListener('change', e => {
   const f = e.target.files[0]; if (f) importDone(f); e.target.value = '';
 });
+
+// ---- list builder (cart) ----
+function cartParts() {
+  const lines = [...cart.entries()].sort((a, b) => a[0] - b[0]).map(([id, name]) => `[#${id}:${name}]`);
+  const parts = []; let cur = '';
+  for (const line of lines) {
+    if (cur && cur.length + 1 + line.length > 1024) { parts.push(cur); cur = line; }
+    else cur = cur ? cur + '\n' + line : line;
+  }
+  if (cur) parts.push(cur);
+  return parts;
+}
+function renderCart() {
+  document.getElementById('cart-toggle').textContent = 'list (' + cart.size + ')';
+  const items = [...cart.entries()].sort((a, b) => a[0] - b[0]);
+  document.getElementById('cart-panel').innerHTML = items.length
+    ? items.map(([id, name]) => `<div class="cart-item"><span>#${id} · ${esc(name)}</span><button onclick="removeFromCart(${id})">×</button></div>`).join('')
+    : '<div style="color:var(--muted)">empty — click ＋ on any puzzle to add it</div>';
+  const parts = cart.size ? cartParts().length : 0;
+  document.getElementById('cart-note').textContent = cart.size
+    ? (parts > 1 ? parts + ' parts when copied (≤1024 chars each)' : '1 part when copied')
+    : '';
+}
+function toggleCart(id, name) { cart.has(id) ? cart.delete(id) : cart.set(id, name); renderCart(); }
+function removeFromCart(id) { cart.delete(id); renderCart(); refresh(); }
+function copyFullList() {
+  if (!cart.size) { toast('list is empty'); return; }
+  const parts = cartParts();
+  copyText(parts.join('\n\n'));
+  toast('copied ' + cart.size + ' nonograms' + (parts.length > 1 ? ' in ' + parts.length + ' parts (≤1024 chars each)' : ''));
+}
+document.getElementById('cart-toggle').onclick = () => {
+  const p = document.getElementById('cart-panel');
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+};
+document.getElementById('cart-copy').onclick = copyFullList;
+document.getElementById('cart-clear').onclick = () => { cart.clear(); renderCart(); refresh(); };
 
 function copyText(t) {
   if (navigator.clipboard) { navigator.clipboard.writeText(t); return; }
