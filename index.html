@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nonograms index</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#242a35; --text:#dbe2ef; --muted:#8a94a8; --accent:#6ea8fe; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel); }
+  h1 { font-size:16px; margin:0 0 10px; }
+  .nav { display:flex; gap:8px; margin-bottom:8px; }
+  .nav button { font:inherit; color:var(--text); background:#0d0f14; border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
+  .nav button.active { border-color:var(--accent); color:var(--accent); }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px; }
+  input, select, button { font:inherit; color:var(--text); background:#0d0f14; border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  input[type=search] { min-width:220px; }
+  .controls label { color:var(--muted); font-size:12px; display:flex; gap:4px; align-items:center; }
+  .banner { display:none; margin:8px 20px 0; padding:6px 10px; background:#16201c; border:1px solid var(--line); border-radius:6px; color:var(--muted); }
+  .banner b { color:var(--text); }
+  .banner button { margin-left:8px; }
+  .stats { color:var(--muted); padding:10px 20px 0; }
+  main { padding:0 20px 30px; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  tbody tr { cursor:pointer; }
+  tbody tr:hover { background:#151923; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  a.author { color:var(--accent); cursor:pointer; }
+  .tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; background:#1c2330; color:var(--accent); }
+  .tag.true { background:#12301f; color:#7ee2a8; }
+  .tag.hard { background:#30120f; color:#e29a7e; }
+  #more { margin:14px 0; width:100%; }
+  #stats-view { display:none; margin-top:10px; }
+  #stats-view .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+  #stats-view h3 { font-size:13px; color:var(--muted); margin:14px 0 4px; text-transform:uppercase; letter-spacing:.04em; }
+  #stats-view ul { list-style:none; margin:0; padding:0; }
+  #stats-view li { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid var(--line); }
+  #stats-view li span:last-child { color:var(--muted); font-variant-numeric:tabular-nums; }
+  #detail { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.6); z-index:10; }
+  #detail.open { display:flex; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px 20px; max-width:460px; width:90%; max-height:82vh; overflow:auto; }
+  .card h2 { margin:0 0 6px; font-size:17px; }
+  .card .alt { color:var(--muted); margin-bottom:10px; }
+  .card dl { display:grid; grid-template-columns:120px 1fr; gap:4px 10px; margin:0; }
+  .card dt { color:var(--muted); }
+  .card dd { margin:0; }
+  .close { float:right; background:none; border:none; color:var(--muted); font-size:18px; }
+  footer { color:var(--muted); padding:10px 20px 40px; border-top:1px solid var(--line); font-size:12px; }
+  @media (max-width:720px) {
+    header { position:static; }
+    .controls { gap:6px; }
+    input[type=search] { width:100%; min-width:0; }
+    .table-wrap { overflow-x:auto; }
+    th, td { padding:6px 8px; white-space:nowrap; }
+    td.name { max-width:160px; overflow:hidden; text-overflow:ellipsis; }
+    .card dl { grid-template-columns:100px 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Nonograms Katana — index</h1>
+  <div class="nav">
+    <button id="nav-browse" class="active">Browse</button>
+    <button id="nav-stats">Stats</button>
+  </div>
+  <div id="browse-controls">
+    <div class="controls">
+      <input id="q" type="search" placeholder="Search id / name / author…">
+      <label>size <select id="min"></select> – <select id="max"></select></label>
+      <select id="color"><option value="">colour + B/W</option><option value="1">colour</option><option value="0">B/W</option></select>
+      <label>colours <select id="cmin"></select> – <select id="cmax"></select></label>
+      <select id="sort">
+        <option value="id">newest first</option>
+        <option value="area">largest</option>
+        <option value="fill">most filled</option>
+      </select>
+    </div>
+    <div class="controls">
+      <label>XP <select id="xp">
+        <option value="">any</option><option value="<3k">&lt;3k</option><option value="3-4k">3–4k</option>
+        <option value="4-5k">4–5k</option><option value="5-6k">5–6k</option><option value="6k+">6k+</option>
+        <option value="unknown">unknown</option>
+      </select></label>
+      <label>type <select id="type">
+        <option value="">any</option><option value="true">true</option><option value="hard">hard</option>
+        <option value="medi">medi</option><option value="symmetry">symmetry</option>
+        <option value="coloring">coloring</option><option value="mosaic">mosaic</option>
+        <option value="unknown">unknown</option>
+      </select></label>
+      <label>category <select id="cat"><option value="">any</option></select></label>
+      <label>list <select id="list">
+        <option value="">any</option>
+        <option value="any-list">on a community list</option>
+        <option value="191904">high-XP 3k+</option>
+        <option value="238184">B/W &gt;2k</option>
+        <option value="237942">second tier</option>
+        <option value="187784">easy 60 MP</option>
+        <option value="233518">easy 60 MP 2</option>
+        <option value="187748">48 MP</option>
+        <option value="191702">MP list</option>
+        <option value="239132">list index</option>
+        <option value="none">not on a list</option>
+      </select></label>
+      <button id="reset">reset</button>
+    </div>
+  </div>
+</header>
+<div class="banner" id="banner"></div>
+<div class="stats" id="stats">loading…</div>
+<main>
+  <div id="browse-view">
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>id</th><th>name</th><th>author</th><th>size</th>
+          <th>type</th><th class="num">colors</th><th class="num">fill</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <button id="more" style="display:none">load more</button>
+  </div>
+  <div id="stats-view"></div>
+</main>
+<div id="detail"><div class="card">
+  <button class="close" onclick="closeDetail()">×</button>
+  <h2 id="d_name"></h2>
+  <div class="alt" id="d_alt"></div>
+  <p style="margin:2px 0 8px"><button id="d_copy">copy #id</button>
+  <span style="color:var(--muted);font-size:12px">paste into the app's search funnel</span></p>
+  <dl id="d_fields"></dl>
+</div></div>
+<footer>Metadata only — no solutions, clues or images are published. Sources: the app's own
+catalogue; see docs/LEGAL.md.</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
+<script>
+let db = null, page = 0, view = 'browse', authorFilter = null;
+const PAGE = 200;
+const SIZES = [40,45,50,55,60,65,70,75,80];
+const TYPE_SHORT = { true:'true', hard:'hard', medi:'medi', symmetry:'sym', 'coloring-few':'col-few', 'coloring-lot':'col-lot', mosaic:'mosaic' };
+const CAT_NAMES = {1:"Around",2:"Egypt",3:"Science",4:"Japan",5:"Kawaii",6:"Anime",7:"Cartoon",8:"Movies",9:"Video",10:"Flags",11:"Fantasy",12:"Fiction",13:"Super",14:"Unreal",15:"Dragons",16:"Adventures",17:"Ships",18:"Pirates",19:"Games",20:"Music",21:"Animals",22:"Birds",23:"Cats",24:"Dogs",25:"Fish",26:"Insects",27:"Plants",28:"Flowers",29:"People",30:"Painting",31:"Nature",32:"Houses",33:"Designs",34:"Photorealism",35:"Transport",36:"Space",37:"Twilight",38:"Love",39:"Smiles",40:"Holidays",41:"Symbols",43:"Horoscope",44:"Food",45:"Clothes",46:"Objects",47:"Machines",48:"Sport",49:"Weapons",50:"History"};
+
+function fillOpts(sel, items, value) {
+  items.forEach(([v, label]) => { const o = document.createElement('option'); o.value = v; o.textContent = label; if (String(v) === String(value)) o.selected = true; sel.appendChild(o); });
+}
+fillOpts(document.getElementById('min'), SIZES.map(s => [s, s + '×' + s]), 40);
+fillOpts(document.getElementById('max'), SIZES.map(s => [s, s + '×' + s]), 80);
+fillOpts(document.getElementById('cmin'), [['', 'any']].concat([...Array(12)].map((_,i) => [i+1, i+1])), '');
+fillOpts(document.getElementById('cmax'), [['', 'any']].concat([...Array(12)].map((_,i) => [i+1, i+1])), '');
+fillOpts(document.getElementById('cat'), [['', 'any']].concat(Object.keys(CAT_NAMES).sort((a,b)=>a-b).map(k => [k, k + ' · ' + CAT_NAMES[k]])), '');
+
+initSqlJs({ locateFile: f => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${f}` })
+  .then(SQL => fetch('./public.db').then(r => r.arrayBuffer()).then(buf => {
+    db = new SQL.Database(new Uint8Array(buf)); refresh();
+  }))
+  .catch(e => { document.getElementById('stats').textContent = 'failed to load: ' + e; });
+
+function where() {
+  const cond = [], p = [];
+  const q = (document.getElementById('q').value || '').trim().toLowerCase();
+  if (q) {
+    if (/^\d+$/.test(q)) { cond.push("(search LIKE '%'||?||'%' OR CAST(id AS TEXT) LIKE '%'||?||'%')"); p.push(q, q); }
+    else { cond.push("search LIKE '%'||?||'%'"); p.push(q); }
+  }
+  const mn = +document.getElementById('min').value, mx = +document.getElementById('max').value;
+  cond.push("w >= ? AND h >= ?"); p.push(mn, mn);
+  cond.push("w <= ? AND h <= ?"); p.push(mx, mx);
+  const color = document.getElementById('color').value;
+  if (color !== '') { cond.push("color = ?"); p.push(+color); }
+  const cmin = document.getElementById('cmin').value, cmax = document.getElementById('cmax').value;
+  if (cmin !== '') { cond.push("colors >= ?"); p.push(+cmin); }
+  if (cmax !== '') { cond.push("colors <= ?"); p.push(+cmax); }
+  const xp = document.getElementById('xp').value;
+  if (xp === 'unknown') cond.push("xp_range IS NULL");
+  else if (xp) { cond.push("xp_range = ?"); p.push(xp); }
+  const type = document.getElementById('type').value;
+  if (type === 'true') cond.push("type = 'true'");
+  else if (type === 'hard') cond.push("type = 'hard'");
+  else if (type === 'medi') cond.push("type = 'medi'");
+  else if (type === 'symmetry') cond.push("type = 'symmetry'");
+  else if (type === 'coloring') cond.push("type IN ('coloring-few','coloring-lot')");
+  else if (type === 'mosaic') cond.push("type = 'mosaic'");
+  else if (type === 'unknown') cond.push("type = 'unknown'");
+  const cat = document.getElementById('cat').value;
+  if (cat) { cond.push("(cat1 = ? OR cat2 = ?)"); p.push(+cat, +cat); }
+  const lst = document.getElementById('list').value;
+  if (lst === 'any-list') cond.push("groups IS NOT NULL AND groups != ''");
+  else if (lst === 'none') cond.push("(groups IS NULL OR groups = '')");
+  else if (lst) { cond.push("(','||groups||',') LIKE '%,'||?||',%'"); p.push(lst); }
+  if (authorFilter) { cond.push("author = ?"); p.push(authorFilter); }
+  return { sql: 'WHERE ' + cond.join(' AND '), p };
+}
+
+function order() {
+  const s = document.getElementById('sort').value;
+  return { id:'id DESC', area:'area DESC, id DESC', fill:'fill_pct DESC, id DESC' }[s] || 'id DESC';
+}
+function query(sql, params) {
+  const st = db.prepare(sql); st.bind(params); const rows = [];
+  while (st.step()) rows.push(st.getAsObject()); st.free(); return rows;
+}
+
+function refresh() {
+  if (view === 'stats') return renderStats();
+  page = 0;
+  document.getElementById('rows').innerHTML = '';
+  const { sql, p } = where();
+  const s = query(`SELECT COUNT(*) n,
+        SUM(CASE WHEN color=1 THEN 1 ELSE 0 END) c,
+        SUM(CASE WHEN color=0 THEN 1 ELSE 0 END) b,
+        SUM(CASE WHEN color IS NULL THEN 1 ELSE 0 END) u
+        FROM puzzles ${sql}`, p)[0];
+  document.getElementById('stats').textContent =
+    `${s.n.toLocaleString()} puzzles · ${s.c.toLocaleString()} colour · ${s.b.toLocaleString()} B/W · ${s.u.toLocaleString()} unknown`;
+  document.getElementById('banner').style.display = authorFilter ? 'block' : 'none';
+  document.getElementById('banner').innerHTML =
+    authorFilter ? `filtering by author <b>${esc(authorFilter)}</b> <button onclick="clearAuthor()">clear</button>` : '';
+  render();
+}
+
+function typeCell(t) {
+  if (!t || t === 'unknown') return '–';
+  const label = TYPE_SHORT[t] || t;
+  return label === 'true' ? `<span class="tag true">${label}</span>` : (label === 'hard' ? `<span class="tag hard">${label}</span>` : `<span class="tag">${label}</span>`);
+}
+
+function render() {
+  const { sql, p } = where();
+  const rows = query(`SELECT * FROM puzzles ${sql} ORDER BY ${order()} LIMIT ? OFFSET ?`, [...p, PAGE, page * PAGE]);
+  const tbody = document.getElementById('rows');
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="num">${r.id}</td>` +
+      `<td class="name">${esc(r.name)}${r.alt_name ? ` <span class="tag">${esc(r.alt_name)}</span>` : ''}</td>` +
+      `<td><a class="author" onclick="event.stopPropagation();filterAuthor('${escAttr(r.author)}')">${esc(r.author)}</a></td>` +
+      `<td class="num">${r.w}×${r.h}</td>` +
+      `<td>${typeCell(r.type)}</td>` +
+      `<td class="num">${r.color == null ? '–' : r.colors}</td>` +
+      `<td class="num">${r.fill_pct == null ? '–' : r.fill_pct.toFixed(1) + '%'}</td>`;
+    tr.onclick = () => openDetail(r);
+    tbody.appendChild(tr);
+  });
+  document.getElementById('more').style.display = rows.length === PAGE ? 'block' : 'none';
+  page++;
+}
+
+function filterAuthor(name) { authorFilter = name; refresh(); }
+function clearAuthor() { authorFilter = null; refresh(); }
+
+function renderStats() {
+  const el = document.getElementById('stats-view');
+  const q = (sql, p) => query(sql, p);
+  const total = q(`SELECT COUNT(*) n FROM puzzles`)[0].n;
+  const byBucket = q(`SELECT size_bucket k, COUNT(*) n FROM puzzles GROUP BY size_bucket ORDER BY MIN(w*h)`);
+  const byType = q(`SELECT type k, COUNT(*) n FROM puzzles GROUP BY type ORDER BY n DESC`);
+  const byColor = q(`SELECT color k, COUNT(*) n FROM puzzles GROUP BY color`);
+  const byXp = q(`SELECT xp_range k, COUNT(*) n FROM puzzles WHERE xp_range IS NOT NULL GROUP BY xp_range ORDER BY n DESC`);
+  const byCat = q(`SELECT cat1 k, COUNT(*) n FROM puzzles WHERE cat1 IS NOT NULL GROUP BY cat1 ORDER BY n DESC LIMIT 20`);
+  const topAuthors = q(`SELECT author k, COUNT(*) n FROM puzzles GROUP BY author ORDER BY n DESC LIMIT 20`);
+
+  const li = (arr, fmt) => arr.map(r => `<li><span>${fmt(r.k)}</span><span>${r.n.toLocaleString()}</span></li>`).join('');
+  const bucketOrder = ['<=10','11-15','16-20','21-30','31-39','40-49','50-59','60-69','70-79','80'];
+  byBucket.sort((a,b) => bucketOrder.indexOf(a.k) - bucketOrder.indexOf(b.k));
+  const colorName = k => k === 1 ? 'colour' : (k === 0 ? 'B/W' : 'unknown');
+  const typeName = k => (TYPE_SHORT[k] || k || 'unknown');
+
+  el.innerHTML =
+    `<h3>${total.toLocaleString()} puzzles in the catalogue</h3>` +
+    `<div class="cols">` +
+    `<div><h3>by size</h3><ul>${li(byBucket, k => k)}</ul></div>` +
+    `<div><h3>by type</h3><ul>${li(byType, typeName)}</ul></div>` +
+    `<div><h3>by colour</h3><ul>${li(byColor, colorName)}</ul></div>` +
+    `<div><h3>by XP tier</h3><ul>${li(byXp, k => k)}</ul></div>` +
+    `<div><h3>top categories</h3><ul>${li(byCat, k => (CAT_NAMES[k] || k))}</ul></div>` +
+    `<div><h3>top authors</h3><ul>${li(topAuthors, k => k)}</ul></div>` +
+    `</div>`;
+  document.getElementById('stats').textContent = 'catalogue overview';
+}
+
+function setView(v) {
+  view = v;
+  document.getElementById('nav-browse').classList.toggle('active', v === 'browse');
+  document.getElementById('nav-stats').classList.toggle('active', v === 'stats');
+  document.getElementById('browse-controls').style.display = v === 'browse' ? '' : 'none';
+  document.getElementById('browse-view').style.display = v === 'browse' ? '' : 'none';
+  document.getElementById('stats-view').style.display = v === 'stats' ? 'block' : 'none';
+  document.getElementById('banner').style.display = 'none';
+  document.getElementById('more').style.display = 'none';
+  refresh();
+}
+
+document.getElementById('nav-browse').onclick = () => setView('browse');
+document.getElementById('nav-stats').onclick = () => setView('stats');
+document.getElementById('more').onclick = render;
+document.getElementById('reset').onclick = () => {
+  document.getElementById('q').value = '';
+  document.getElementById('min').value = '40'; document.getElementById('max').value = '80';
+  document.getElementById('color').value = '';
+  document.getElementById('cmin').value = ''; document.getElementById('cmax').value = '';
+  document.getElementById('xp').value = ''; document.getElementById('type').value = '';
+  document.getElementById('cat').value = ''; document.getElementById('list').value = '';
+  document.getElementById('sort').value = 'id';
+  authorFilter = null;
+  refresh();
+};
+['q','min','max','color','cmin','cmax','xp','type','cat','list','sort'].forEach(id =>
+  document.getElementById(id).addEventListener('change', refresh));
+document.getElementById('q').addEventListener('input', debounce(refresh, 250));
+
+function openDetail(r) {
+  document.getElementById('d_name').textContent = r.name;
+  document.getElementById('d_alt').textContent = r.alt_name || '';
+  const f = [
+    ['id', r.id], ['size', `${r.w} × ${r.h}`], ['author', r.author],
+    ['colour / B&W', r.color == null ? 'unknown' : (r.color ? 'colour' : 'black & white')],
+    ['colours', r.colors ?? '—'], ['filled', r.fill_pct == null ? '—' : r.fill_pct.toFixed(1) + '%'],
+    ['type', r.type || 'unknown'],
+  ];
+  if (r.xp_range) f.push(['xp range', r.xp_range]);
+  if (r.cat1 != null) f.push(['categories', [r.cat1, r.cat2].filter(x => x).map(x => CAT_NAMES[x] || x).join(', ')]);
+  if (r.groups) f.push(['lists', r.groups]);
+  f.push(['last seen', fmt(r.last_seen)]);
+  document.getElementById('d_copy').onclick = () => copyText('#' + r.id);
+  document.getElementById('d_fields').innerHTML =
+    f.map(([k, v]) => `<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join('');
+  document.getElementById('detail').classList.add('open');
+}
+function closeDetail() { document.getElementById('detail').classList.remove('open'); }
+document.getElementById('detail').addEventListener('click', e => { if (e.target.id === 'detail') closeDetail(); });
+
+function copyText(t) {
+  if (navigator.clipboard) { navigator.clipboard.writeText(t); return; }
+  const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta);
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escAttr(s) { return esc(s).replace(/'/g, '&#39;'); }
+function fmt(t) { return t ? new Date(t * 1000).toISOString().slice(0, 10) : '—'; }
+function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+</script>
+</body>
+</html>
