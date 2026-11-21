@@ -48,6 +48,10 @@
   #more { margin:14px 0; width:100%; }
   #stats-view { display:none; margin-top:10px; }
   #credits-view { display:none; margin-top:10px; }
+  #about-view { display:none; margin-top:10px; }
+  #about-view h2 { font-size:15px; margin:18px 0 6px; }
+  #about-view p, #about-view li { color:var(--muted); }
+  #about-view b { color:var(--text); }
   #credits-view .cred { border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin:10px 0; }
   #credits-view .cred h3 { margin:0; font-size:14px; }
   #credits-view .cred ul { list-style:none; margin:6px 0 0; padding:0; }
@@ -87,6 +91,7 @@
     <button id="nav-browse" class="active">Browse</button>
     <button id="nav-stats">Stats</button>
     <button id="nav-credits">Credits</button>
+    <button id="nav-about">About</button>
   </div>
   <div id="browse-controls">
     <div class="controls">
@@ -150,8 +155,29 @@
     <div class="controls" id="cart-controls">
       <button id="cart-toggle">list (0)</button>
       <button id="cart-copy">copy (search)</button>
-      <button id="cart-comment">copy (comment)</button>
       <button id="cart-clear">clear</button>
+      <select id="bulk">
+        <option value="">add from list…</option>
+        <optgroup label="community">
+          <option value="191904">high-XP 3k+</option>
+          <option value="238184">B/W &gt;2k</option>
+          <option value="237942">second tier</option>
+          <option value="187784">easy 60 MP</option>
+          <option value="233518">easy 60 MP 2</option>
+          <option value="187748">48 MP</option>
+          <option value="191702">MP list</option>
+        </optgroup>
+        <optgroup label="wiki">
+          <option value="xpc">XP color (3k+)</option>
+          <option value="xpbw">XP B/W (&gt;2k)</option>
+          <option value="xpco25">XP color other (2.5–3k)</option>
+          <option value="xpco0">XP color other (&lt;2.5k)</option>
+          <option value="xpbwo">XP B/W other</option>
+          <option value="mp60">Easy 60 MP</option>
+          <option value="mpo">Easy other</option>
+        </optgroup>
+      </select>
+      <button id="bulk-add">add not done</button>
       <span id="cart-note"></span>
     </div>
   </div>
@@ -176,6 +202,7 @@
   </div>
   <div id="stats-view"></div>
   <div id="credits-view"></div>
+  <div id="about-view"></div>
 </main>
 <div id="detail"><div class="card">
   <button class="close" onclick="closeDetail()">×</button>
@@ -356,19 +383,23 @@ function setView(v) {
   document.getElementById('nav-browse').classList.toggle('active', v === 'browse');
   document.getElementById('nav-stats').classList.toggle('active', v === 'stats');
   document.getElementById('nav-credits').classList.toggle('active', v === 'credits');
+  document.getElementById('nav-about').classList.toggle('active', v === 'about');
   document.getElementById('browse-controls').style.display = v === 'browse' ? '' : 'none';
   document.getElementById('browse-view').style.display = v === 'browse' ? '' : 'none';
   document.getElementById('stats-view').style.display = v === 'stats' ? 'block' : 'none';
   document.getElementById('credits-view').style.display = v === 'credits' ? 'block' : 'none';
+  document.getElementById('about-view').style.display = v === 'about' ? 'block' : 'none';
   document.getElementById('banner').style.display = 'none';
   document.getElementById('more').style.display = 'none';
   if (v === 'credits') { loadCredits().then(renderCredits); return; }
+  if (v === 'about') { renderAbout(); return; }
   refresh();
 }
 
 document.getElementById('nav-browse').onclick = () => setView('browse');
 document.getElementById('nav-stats').onclick = () => setView('stats');
 document.getElementById('nav-credits').onclick = () => setView('credits');
+document.getElementById('nav-about').onclick = () => setView('about');
 document.getElementById('more').onclick = render;
 document.getElementById('reset').onclick = () => {
   document.getElementById('q').value = '';
@@ -506,26 +537,13 @@ document.getElementById('import-done').addEventListener('change', e => {
 });
 
 // ---- list builder (cart) ----
-function cartParts() {
-  const lines = [...cart.entries()].sort((a, b) => a[0] - b[0]).map(([id, name]) => `[#${id}:${name}]`);
-  const parts = []; let cur = '';
-  for (const line of lines) {
-    if (cur && cur.length + 1 + line.length > 1024) { parts.push(cur); cur = line; }
-    else cur = cur ? cur + '\n' + line : line;
-  }
-  if (cur) parts.push(cur);
-  return parts;
-}
 function renderCart() {
   document.getElementById('cart-toggle').textContent = 'list (' + cart.size + ')';
   const items = [...cart.entries()].sort((a, b) => a[0] - b[0]);
   document.getElementById('cart-panel').innerHTML = items.length
     ? items.map(([id, name]) => `<div class="cart-item"><span>#${id} · ${esc(name)}</span><button onclick="removeFromCart(${id})">×</button></div>`).join('')
     : '<div style="color:var(--muted)">empty — click ＋ on any puzzle to add it</div>';
-  const parts = cart.size ? cartParts().length : 0;
-  document.getElementById('cart-note').textContent = cart.size
-    ? cart.size + ' ids' + (parts > 1 ? ' · ' + parts + ' comment parts' : '')
-    : '';
+  document.getElementById('cart-note').textContent = cart.size ? cart.size + ' ids' : '';
 }
 function toggleCart(id, name) { cart.has(id) ? cart.delete(id) : cart.set(id, name); renderCart(); }
 function removeFromCart(id) { cart.delete(id); renderCart(); refresh(); }
@@ -535,18 +553,24 @@ function copySearchList() {
   copyText(text);
   toast('copied ' + cart.size + ' ids (search filter format)');
 }
-function copyCommentList() {
-  if (!cart.size) { toast('list is empty'); return; }
-  const parts = cartParts();
-  copyText(parts.join('\n\n'));
-  toast('copied ' + cart.size + ' nonograms' + (parts.length > 1 ? ' in ' + parts.length + ' parts (≤1024 chars each)' : ''));
+function bulkAdd() {
+  const val = document.getElementById('bulk').value;
+  if (!val) { toast('pick a list first'); return; }
+  const col = WIKI_LISTS[val] ? 'wiki_lists' : 'groups';
+  const rows = query(`SELECT id, name FROM puzzles WHERE (','||${col}||',') LIKE '%,'||?||',%'`, [val]);
+  let added = 0;
+  for (const r of rows) {
+    if (!doneSet.has(r.id) && !cart.has(r.id)) { cart.set(r.id, r.name); added++; }
+  }
+  renderCart();
+  toast('added ' + added + ' not-done puzzles');
 }
 document.getElementById('cart-toggle').onclick = () => {
   const p = document.getElementById('cart-panel');
   p.style.display = p.style.display === 'block' ? 'none' : 'block';
 };
 document.getElementById('cart-copy').onclick = copySearchList;
-document.getElementById('cart-comment').onclick = copyCommentList;
+document.getElementById('bulk-add').onclick = bulkAdd;
 document.getElementById('cart-clear').onclick = () => { cart.clear(); renderCart(); refresh(); };
 
 // ---- credits ----
@@ -569,6 +593,42 @@ function renderCredits() {
           <ul>${rows}</ul>
           <div class="tot">${l.total.toLocaleString()} nonograms</div></div>`;
       }).join('')}
+    </div>`;
+}
+
+function renderAbout() {
+  document.getElementById('stats').textContent = 'about';
+  document.getElementById('about-view').innerHTML =
+    `<div class="ab" style="max-width:780px">
+      <h2>About this site</h2>
+      <p>An unofficial, <b>metadata-only</b> browser for large Nonograms Katana user puzzles
+      (40×40 and up). It indexes what is already public in the game so you can search, filter and
+      build lists — it does <b>not</b> host puzzles, solutions or images.</p>
+
+      <h2>Where the data comes from</h2>
+      <ul>
+        <li><b>Puzzle catalogue</b> — the app's own public list (titles, authors, sizes, categories, type).</li>
+        <li><b>Community lists</b> — the curated lists players maintain in the app's comments (XP tiers, MP lists).</li>
+        <li><b>Wiki database lists</b> — the colour/range-split lists from the fandom wiki.</li>
+        <li><b>Facts</b> (colour vs B&amp;W, colour count, % filled) — decoded locally from the solutions, for display only.</li>
+      </ul>
+
+      <h2>Shown / not shown</h2>
+      <p><b>Shown:</b> id, size, title, author, colour vs B&amp;W, colour count, fill %, type, XP tier,
+      list memberships, categories.</p>
+      <p><b>Never shown or published:</b> solutions, clue grids, solution images, thumbnails, .ujc files.</p>
+
+      <h2>Done tracking &amp; list builder</h2>
+      <ul>
+        <li><b>Done</b> is stored locally in your browser (IndexedDB); export/import a JSON backup to move it between devices.</li>
+        <li><b>List builder</b> — click ＋ to collect puzzles, then "copy (search)" for a semicolon list to paste into the
+        app's search filter. "add from list → add not done" bulk-adds a whole list's unsolved puzzles.</li>
+      </ul>
+
+      <h2>Thanks</h2>
+      <p>All the real work — the puzzles, the lists, the XP/type values — is done by the Nonograms Katana
+      community. This site only re-displays that public data (see <a href="#" style="color:var(--accent)"
+      onclick="setView('credits'); return false;">Credits</a>). Not affiliated with ucdevs.</p>
     </div>`;
 }
 
