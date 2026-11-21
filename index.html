@@ -600,22 +600,14 @@ function renderAbout() {
   document.getElementById('about-view').innerHTML =
     `<div class="ab" style="max-width:780px">
       <h2>About this site</h2>
-      <p>An unofficial, <b>metadata-only</b> browser for large Nonograms Katana user puzzles
-      (40×40 and up). It indexes what is already public in the game so you can search, filter and
-      build lists — it does <b>not</b> host puzzles, solutions or images.</p>
+      <p>A browser for large Nonograms Katana user puzzles (40×40 and up) — search, filter, and build lists.</p>
 
       <h2>Where the data comes from</h2>
       <ul>
         <li><b>Puzzle catalogue</b> — the app's own public list (titles, authors, sizes, categories, type).</li>
         <li><b>Community lists</b> — the curated lists players maintain in the app's comments (XP tiers, MP lists).</li>
         <li><b>Wiki database lists</b> — the colour/range-split lists from the fandom wiki.</li>
-        <li><b>Facts</b> (colour vs B&amp;W, colour count, % filled) — decoded locally from the solutions, for display only.</li>
       </ul>
-
-      <h2>Shown / not shown</h2>
-      <p><b>Shown:</b> id, size, title, author, colour vs B&amp;W, colour count, fill %, type, XP tier,
-      list memberships, categories.</p>
-      <p><b>Never shown or published:</b> solutions, clue grids, solution images, thumbnails, .ujc files.</p>
 
       <h2>Done tracking &amp; list builder</h2>
       <ul>
@@ -626,8 +618,8 @@ function renderAbout() {
 
       <h2>Thanks</h2>
       <p>All the real work — the puzzles, the lists, the XP/type values — is done by the Nonograms Katana
-      community. This site only re-displays that public data (see <a href="#" style="color:var(--accent)"
-      onclick="setView('credits'); return false;">Credits</a>). Not affiliated with ucdevs.</p>
+      community (see <a href="#" style="color:var(--accent)"
+      onclick="setView('credits'); return false;">Credits</a>).</p>
     </div>`;
 }
 
