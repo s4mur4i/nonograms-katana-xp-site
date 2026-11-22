@@ -419,6 +419,14 @@ document.getElementById('reset').onclick = () => {
   document.getElementById(id).addEventListener('change', refresh));
 document.getElementById('q').addEventListener('input', debounce(refresh, 250));
 
+function xpEst(r) {
+  // empirical estimate (area x colour-factor); exact XP needs the solver (see docs)
+  if (r.color == null) return null;
+  if (r.color === 0) return Math.round(r.area * 0.36);
+  const k = Math.min(0.42 + 0.008 * (r.colors ?? 2), 0.51);
+  return Math.round(r.area * k);
+}
+
 function openDetail(r) {
   document.getElementById('d_name').textContent = r.name;
   document.getElementById('d_alt').textContent = r.alt_name || '';
@@ -429,6 +437,8 @@ function openDetail(r) {
     ['type', r.type || 'unknown'],
   ];
   if (r.xp_range) f.push(['xp range', r.xp_range]);
+  const xp = xpEst(r);
+  if (xp != null) f.push(['xp (estimate)', '~' + xp.toLocaleString() + ' (±40%)']);
   if (r.cat1 != null) f.push(['categories', [r.cat1, r.cat2].filter(x => x).map(x => CAT_NAMES[x] || x).join(', ')]);
   if (r.groups) f.push(['lists', r.groups]);
   if (r.wiki_lists) f.push(['wiki lists', r.wiki_lists.split(',').map(x => WIKI_LISTS[x] || x).join(', ')]);
