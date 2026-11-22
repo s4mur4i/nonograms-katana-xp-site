@@ -41,7 +41,7 @@
   .add-cell { text-align:center; width:34px; padding:0; }
   .add-btn { border:none; background:none; color:var(--accent); font-size:17px; cursor:pointer; padding:0 2px; line-height:1; }
   #cart-controls { border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
-  #cart-panel { margin:8px 20px 0; padding:8px 12px; background:#10141c; border:1px solid var(--line); border-radius:8px; max-height:440px; overflow:auto; display:none; }
+  #cart-panel { margin:8px 20px 0; padding:8px 12px; background:#10141c; border:1px solid var(--line); border-radius:8px; max-height:260px; overflow:auto; display:none; }
   #cart-panel .cart-item { display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px solid var(--line); }
   #cart-panel .cart-item button { border:none; background:none; color:var(--muted); cursor:pointer; font-size:16px; }
   #cart-note { color:var(--muted); font-size:12px; }
@@ -181,9 +181,7 @@
           <option value="mpo">Easy other</option>
         </optgroup>
       </select>
-      <button id="bulk-add">add from list (not done)</button>
-      <button id="bulk-matching">add all matching (not done)</button>
-      <button id="cart-markdone">mark done</button>
+      <button id="bulk-add">add not done</button>
       <span id="cart-note"></span>
     </div>
   </div>
@@ -338,7 +336,7 @@ function render() {
       `<td>${typeCell(r.type)}</td>` +
       `<td class="num">${r.color == null ? '–' : r.colors}</td>` +
       `<td class="num">${r.fill_pct == null ? '–' : r.fill_pct.toFixed(1) + '%'}</td>` +
-      `<td class="add-cell"><button class="add-btn" data-id="${r.id}" onclick="event.stopPropagation(); toggleCart(${r.id}, '${escAttr(r.name)}')">${cart.has(r.id) ? '−' : '＋'}</button></td>`;
+      `<td class="add-cell"><button class="add-btn" onclick="event.stopPropagation(); toggleCart(${r.id}, '${escAttr(r.name)}')">${cart.has(r.id) ? '−' : '＋'}</button></td>`;
     tr.onclick = () => openDetail(r);
     tbody.appendChild(tr);
   });
@@ -419,14 +417,6 @@ document.getElementById('reset').onclick = () => {
   document.getElementById(id).addEventListener('change', refresh));
 document.getElementById('q').addEventListener('input', debounce(refresh, 250));
 
-function xpEst(r) {
-  // empirical estimate (area x colour-factor); exact XP needs the solver (see docs)
-  if (r.color == null) return null;
-  if (r.color === 0) return Math.round(r.area * 0.36);
-  const k = Math.min(0.42 + 0.008 * (r.colors ?? 2), 0.51);
-  return Math.round(r.area * k);
-}
-
 function openDetail(r) {
   document.getElementById('d_name').textContent = r.name;
   document.getElementById('d_alt').textContent = r.alt_name || '';
@@ -437,8 +427,6 @@ function openDetail(r) {
     ['type', r.type || 'unknown'],
   ];
   if (r.xp_range) f.push(['xp range', r.xp_range]);
-  const xp = xpEst(r);
-  if (xp != null) f.push(['xp (estimate)', '~' + xp.toLocaleString() + ' (±40%)']);
   if (r.cat1 != null) f.push(['categories', [r.cat1, r.cat2].filter(x => x).map(x => CAT_NAMES[x] || x).join(', ')]);
   if (r.groups) f.push(['lists', r.groups]);
   if (r.wiki_lists) f.push(['wiki lists', r.wiki_lists.split(',').map(x => WIKI_LISTS[x] || x).join(', ')]);
@@ -556,16 +544,8 @@ function renderCart() {
     : '<div style="color:var(--muted)">empty — click ＋ on any puzzle to add it</div>';
   document.getElementById('cart-note').textContent = cart.size ? cart.size + ' ids' : '';
 }
-function updateCartButtons() {
-  document.querySelectorAll('.add-btn').forEach(b => {
-    b.textContent = cart.has(+b.dataset.id) ? '−' : '＋';
-  });
-}
-function toggleCart(id, name) {
-  if (cart.has(id)) cart.delete(id); else cart.set(id, name);
-  renderCart(); updateCartButtons();
-}
-function removeFromCart(id) { cart.delete(id); renderCart(); updateCartButtons(); }
+function toggleCart(id, name) { cart.has(id) ? cart.delete(id) : cart.set(id, name); renderCart(); }
+function removeFromCart(id) { cart.delete(id); renderCart(); refresh(); }
 function copySearchList() {
   if (!cart.size) { toast('list is empty'); return; }
   const text = [...cart.keys()].sort((a, b) => a - b).map(id => '#' + id).join(';');
@@ -581,27 +561,8 @@ function bulkAdd() {
   for (const r of rows) {
     if (!doneSet.has(r.id) && !cart.has(r.id)) { cart.set(r.id, r.name); added++; }
   }
-  renderCart(); updateCartButtons();
+  renderCart();
   toast('added ' + added + ' not-done puzzles');
-}
-function bulkAddMatching() {
-  const { sql, p } = where();
-  const rows = query(`SELECT id, name FROM puzzles ${sql}`, p);
-  let added = 0;
-  for (const r of rows) {
-    if (!doneSet.has(r.id) && !cart.has(r.id)) { cart.set(r.id, r.name); added++; }
-  }
-  renderCart(); updateCartButtons();
-  toast('added ' + added + ' not-done puzzles (matching filters)');
-}
-function markCartDone() {
-  if (!cart.size) { toast('list is empty'); return; }
-  let n = 0;
-  for (const id of cart.keys()) {
-    if (!doneSet.has(id)) { doneSet.add(id); n++; }
-  }
-  persistDone(); syncDoneTable(); updateDoneNote(); updateCartButtons(); refresh();
-  toast('marked ' + n + ' done');
 }
 document.getElementById('cart-toggle').onclick = () => {
   const p = document.getElementById('cart-panel');
@@ -609,8 +570,6 @@ document.getElementById('cart-toggle').onclick = () => {
 };
 document.getElementById('cart-copy').onclick = copySearchList;
 document.getElementById('bulk-add').onclick = bulkAdd;
-document.getElementById('bulk-matching').onclick = bulkAddMatching;
-document.getElementById('cart-markdone').onclick = markCartDone;
 document.getElementById('cart-clear').onclick = () => { cart.clear(); renderCart(); refresh(); };
 
 // ---- credits ----
