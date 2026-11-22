@@ -182,6 +182,7 @@
         </optgroup>
       </select>
       <button id="bulk-add">add not done</button>
+      <button id="bulk-matching">add matching (not done)</button>
       <span id="cart-note"></span>
     </div>
   </div>
@@ -336,7 +337,7 @@ function render() {
       `<td>${typeCell(r.type)}</td>` +
       `<td class="num">${r.color == null ? '–' : r.colors}</td>` +
       `<td class="num">${r.fill_pct == null ? '–' : r.fill_pct.toFixed(1) + '%'}</td>` +
-      `<td class="add-cell"><button class="add-btn" onclick="event.stopPropagation(); toggleCart(${r.id}, '${escAttr(r.name)}')">${cart.has(r.id) ? '−' : '＋'}</button></td>`;
+      `<td class="add-cell"><button class="add-btn" data-id="${r.id}" onclick="event.stopPropagation(); toggleCart(${r.id}, '${escAttr(r.name)}')">${cart.has(r.id) ? '−' : '＋'}</button></td>`;
     tr.onclick = () => openDetail(r);
     tbody.appendChild(tr);
   });
@@ -544,8 +545,16 @@ function renderCart() {
     : '<div style="color:var(--muted)">empty — click ＋ on any puzzle to add it</div>';
   document.getElementById('cart-note').textContent = cart.size ? cart.size + ' ids' : '';
 }
-function toggleCart(id, name) { cart.has(id) ? cart.delete(id) : cart.set(id, name); renderCart(); }
-function removeFromCart(id) { cart.delete(id); renderCart(); refresh(); }
+function updateCartButtons() {
+  document.querySelectorAll('.add-btn').forEach(b => {
+    b.textContent = cart.has(+b.dataset.id) ? '−' : '＋';
+  });
+}
+function toggleCart(id, name) {
+  if (cart.has(id)) cart.delete(id); else cart.set(id, name);
+  renderCart(); updateCartButtons();
+}
+function removeFromCart(id) { cart.delete(id); renderCart(); updateCartButtons(); }
 function copySearchList() {
   if (!cart.size) { toast('list is empty'); return; }
   const text = [...cart.keys()].sort((a, b) => a - b).map(id => '#' + id).join(';');
@@ -561,8 +570,18 @@ function bulkAdd() {
   for (const r of rows) {
     if (!doneSet.has(r.id) && !cart.has(r.id)) { cart.set(r.id, r.name); added++; }
   }
-  renderCart();
+  renderCart(); updateCartButtons();
   toast('added ' + added + ' not-done puzzles');
+}
+function bulkAddMatching() {
+  const { sql, p } = where();
+  const rows = query(`SELECT id, name FROM puzzles ${sql}`, p);
+  let added = 0;
+  for (const r of rows) {
+    if (!doneSet.has(r.id) && !cart.has(r.id)) { cart.set(r.id, r.name); added++; }
+  }
+  renderCart(); updateCartButtons();
+  toast('added ' + added + ' not-done puzzles (matching filters)');
 }
 document.getElementById('cart-toggle').onclick = () => {
   const p = document.getElementById('cart-panel');
@@ -570,6 +589,7 @@ document.getElementById('cart-toggle').onclick = () => {
 };
 document.getElementById('cart-copy').onclick = copySearchList;
 document.getElementById('bulk-add').onclick = bulkAdd;
+document.getElementById('bulk-matching').onclick = bulkAddMatching;
 document.getElementById('cart-clear').onclick = () => { cart.clear(); renderCart(); refresh(); };
 
 // ---- credits ----
