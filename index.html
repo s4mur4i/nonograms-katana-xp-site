@@ -41,7 +41,7 @@
   .add-cell { text-align:center; width:34px; padding:0; }
   .add-btn { border:none; background:none; color:var(--accent); font-size:17px; cursor:pointer; padding:0 2px; line-height:1; }
   #cart-controls { border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
-  #cart-panel { margin:8px 20px 0; padding:8px 12px; background:#10141c; border:1px solid var(--line); border-radius:8px; max-height:260px; overflow:auto; display:none; }
+  #cart-panel { margin:8px 20px 0; padding:8px 12px; background:#10141c; border:1px solid var(--line); border-radius:8px; max-height:440px; overflow:auto; display:none; }
   #cart-panel .cart-item { display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px solid var(--line); }
   #cart-panel .cart-item button { border:none; background:none; color:var(--muted); cursor:pointer; font-size:16px; }
   #cart-note { color:var(--muted); font-size:12px; }
@@ -181,8 +181,9 @@
           <option value="mpo">Easy other</option>
         </optgroup>
       </select>
-      <button id="bulk-add">add not done</button>
-      <button id="bulk-matching">add matching (not done)</button>
+      <button id="bulk-add">add from list (not done)</button>
+      <button id="bulk-matching">add all matching (not done)</button>
+      <button id="cart-markdone">mark done</button>
       <span id="cart-note"></span>
     </div>
   </div>
@@ -583,6 +584,15 @@ function bulkAddMatching() {
   renderCart(); updateCartButtons();
   toast('added ' + added + ' not-done puzzles (matching filters)');
 }
+function markCartDone() {
+  if (!cart.size) { toast('list is empty'); return; }
+  let n = 0;
+  for (const id of cart.keys()) {
+    if (!doneSet.has(id)) { doneSet.add(id); n++; }
+  }
+  persistDone(); syncDoneTable(); updateDoneNote(); updateCartButtons(); refresh();
+  toast('marked ' + n + ' done');
+}
 document.getElementById('cart-toggle').onclick = () => {
   const p = document.getElementById('cart-panel');
   p.style.display = p.style.display === 'block' ? 'none' : 'block';
@@ -590,6 +600,7 @@ document.getElementById('cart-toggle').onclick = () => {
 document.getElementById('cart-copy').onclick = copySearchList;
 document.getElementById('bulk-add').onclick = bulkAdd;
 document.getElementById('bulk-matching').onclick = bulkAddMatching;
+document.getElementById('cart-markdone').onclick = markCartDone;
 document.getElementById('cart-clear').onclick = () => { cart.clear(); renderCart(); refresh(); };
 
 // ---- credits ----
