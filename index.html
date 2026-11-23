@@ -51,11 +51,9 @@
   #about-view { display:none; margin-top:10px; }
   #solver-view { display:none; margin-top:10px; }
   .solver-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
-  .srow { display:flex; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--line); max-width:900px; }
-  .srow .sid { font-variant-numeric:tabular-nums; color:var(--muted); }
-  .srow .sname { flex:1; }
-  .srow .smeta { color:var(--muted); font-size:12px; }
-  .srow .scopy { font:inherit; font-size:12px; padding:2px 8px; cursor:pointer; }
+  .sline { display:flex; align-items:center; gap:10px; padding:7px 0; max-width:960px; }
+  .sline code { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; background:#0d0f14; border:1px solid var(--line); padding:4px 8px; border-radius:6px; }
+  .sline button { font:inherit; font-size:12px; padding:3px 10px; cursor:pointer; white-space:nowrap; }
   #about-view h2 { font-size:15px; margin:18px 0 6px; }
   #about-view p, #about-view li { color:var(--muted); }
   #about-view b { color:var(--text); }
@@ -240,8 +238,6 @@
           <option value="mpo">Easy other</option>
         </optgroup>
       </select></label>
-      <button id="solver-copy">copy 10</button>
-      <button id="solver-alldone">mark done</button>
       <span id="solver-remaining" style="color:var(--muted)"></span>
     </div>
     <div id="solver-rows"></div>
@@ -706,6 +702,8 @@ function renderAbout() {
 }
 
 // ---- solver (grind) ----
+const SOLVER_BATCH = 8;    // ids per line (fits the app's 64-char search field)
+const SOLVER_LINES = 5;    // lines shown
 let solverQueue = [];
 function selectSolverList() {
   const val = document.getElementById('solver-list').value;
@@ -723,40 +721,37 @@ function selectSolverList() {
 function solverNotDone() { return solverQueue.filter(r => !doneSet.has(r.id)); }
 function renderSolver() {
   const nd = solverNotDone();
-  const batch = nd.slice(0, 10);
   document.getElementById('solver-remaining').textContent =
     nd.length ? nd.length + ' not done' : '';
-  document.getElementById('solver-rows').innerHTML = batch.map(r => {
-    const xp = xpEst(r);
-    return `<div class="srow">
-      <input type="checkbox" class="done-check" onchange="solverToggleDone(${r.id})">
-      <span class="sid">#${r.id}</span>
-      <span class="sname">${esc(r.name)}</span>
-      <span class="smeta">${r.w}×${r.h} · ${esc(r.type)}${xp != null ? ' · ~' + xp.toLocaleString() + ' xp' : ''}</span>
-    </div>`;
-  }).join('') || '<div style="color:var(--muted);max-width:900px">all done 🎉 — pick another list</div>';
+  const lines = [];
+  for (let i = 0; i < SOLVER_LINES; i++) {
+    const chunk = nd.slice(i * SOLVER_BATCH, (i + 1) * SOLVER_BATCH);
+    if (!chunk.length) break;
+    const str = chunk.map(r => '#' + r.id).join(';');
+    lines.push(`<div class="sline" data-ids="${chunk.map(r => r.id).join(',')}">
+      <code>${esc(str)}</code>
+      <button onclick="solverCopyLine(this)">copy</button>
+      <button onclick="solverMarkLine(this)">mark done</button>
+    </div>`);
+  }
+  document.getElementById('solver-rows').innerHTML =
+    lines.join('') || '<div style="color:var(--muted)">all done 🎉 — pick another list</div>';
 }
-function solverCopy() {
-  const batch = solverNotDone().slice(0, 10);
-  if (!batch.length) { toast('nothing to copy'); return; }
-  copyText(batch.map(r => '#' + r.id).join(';'));
-  toast('copied ' + batch.length + ' ids');
+function solverCopyLine(btn) {
+  const str = btn.parentElement.querySelector('code').textContent;
+  copyText(str);
+  const old = btn.textContent;
+  btn.textContent = 'copied';
+  setTimeout(() => { btn.textContent = old; }, 1200);
 }
-function solverMarkAllDone() {
-  const batch = solverNotDone().slice(0, 10);
-  for (const r of batch) doneSet.add(r.id);
+function solverMarkLine(btn) {
+  const ids = btn.parentElement.dataset.ids.split(',').map(Number);
+  for (const id of ids) doneSet.add(id);
   persistDone(); syncDoneTable(); updateDoneNote();
   renderSolver();
-  toast('marked ' + batch.length + ' done');
-}
-function solverToggleDone(id) {
-  if (doneSet.has(id)) doneSet.delete(id); else doneSet.add(id);
-  persistDone(); syncDoneTable(); updateDoneNote();
-  renderSolver();
+  toast('marked ' + ids.length + ' done');
 }
 document.getElementById('solver-list').addEventListener('change', selectSolverList);
-document.getElementById('solver-copy').onclick = solverCopy;
-document.getElementById('solver-alldone').onclick = solverMarkAllDone;
 
 function copyText(t) {
   if (navigator.clipboard) { navigator.clipboard.writeText(t); return; }
