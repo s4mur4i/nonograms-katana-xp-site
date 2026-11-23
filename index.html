@@ -240,6 +240,8 @@
           <option value="mpo">Easy other</option>
         </optgroup>
       </select></label>
+      <button id="solver-copy">copy 10</button>
+      <button id="solver-alldone">mark done</button>
       <span id="solver-remaining" style="color:var(--muted)"></span>
     </div>
     <div id="solver-rows"></div>
@@ -711,39 +713,46 @@ function selectSolverList() {
   const col = WIKI_LISTS[val] ? 'wiki_lists' : 'groups';
   solverQueue = query(
     `SELECT id, name, w, h, type, area, color, colors FROM puzzles
-     WHERE (','||${col}||',') LIKE '%,'||?||',%'
-       AND NOT EXISTS (SELECT 1 FROM done d WHERE d.id = puzzles.id)
-     ORDER BY id`, [val]);
+     WHERE (','||${col}||',') LIKE '%,'||?||',%' ORDER BY id`, [val]);
   renderSolver();
 }
+function solverNotDone() { return solverQueue.filter(r => !doneSet.has(r.id)); }
 function renderSolver() {
-  const batch = solverQueue.slice(0, 10);
+  const nd = solverNotDone();
+  const batch = nd.slice(0, 10);
   document.getElementById('solver-remaining').textContent =
-    solverQueue.length ? solverQueue.length + ' not done' : '';
+    nd.length ? nd.length + ' not done' : '';
   document.getElementById('solver-rows').innerHTML = batch.map(r => {
     const xp = xpEst(r);
     return `<div class="srow">
-      <input type="checkbox" class="done-check" ${doneSet.has(r.id) ? 'checked' : ''} onchange="solverToggleDone(${r.id})">
-      <button class="scopy" onclick="solverCopy(this, ${r.id})">copy</button>
+      <input type="checkbox" class="done-check" onchange="solverToggleDone(${r.id})">
       <span class="sid">#${r.id}</span>
       <span class="sname">${esc(r.name)}</span>
       <span class="smeta">${r.w}×${r.h} · ${esc(r.type)}${xp != null ? ' · ~' + xp.toLocaleString() + ' xp' : ''}</span>
     </div>`;
   }).join('') || '<div style="color:var(--muted);max-width:900px">all done 🎉 — pick another list</div>';
 }
+function solverCopy() {
+  const batch = solverNotDone().slice(0, 10);
+  if (!batch.length) { toast('nothing to copy'); return; }
+  copyText(batch.map(r => '#' + r.id).join(';'));
+  toast('copied ' + batch.length + ' ids');
+}
+function solverMarkAllDone() {
+  const batch = solverNotDone().slice(0, 10);
+  for (const r of batch) doneSet.add(r.id);
+  persistDone(); syncDoneTable(); updateDoneNote();
+  renderSolver();
+  toast('marked ' + batch.length + ' done');
+}
 function solverToggleDone(id) {
   if (doneSet.has(id)) doneSet.delete(id); else doneSet.add(id);
   persistDone(); syncDoneTable(); updateDoneNote();
-  solverQueue = solverQueue.filter(x => x.id !== id);
   renderSolver();
 }
-function solverCopy(btn, id) {
-  copyText('#' + id);
-  const old = btn.textContent;
-  btn.textContent = 'copied';
-  setTimeout(() => { btn.textContent = old; }, 1200);
-}
 document.getElementById('solver-list').addEventListener('change', selectSolverList);
+document.getElementById('solver-copy').onclick = solverCopy;
+document.getElementById('solver-alldone').onclick = solverMarkAllDone;
 
 function copyText(t) {
   if (navigator.clipboard) { navigator.clipboard.writeText(t); return; }
