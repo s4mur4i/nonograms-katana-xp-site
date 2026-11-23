@@ -713,7 +713,11 @@ function selectSolverList() {
   const col = WIKI_LISTS[val] ? 'wiki_lists' : 'groups';
   solverQueue = query(
     `SELECT id, name, w, h, type, area, color, colors FROM puzzles
-     WHERE (','||${col}||',') LIKE '%,'||?||',%' ORDER BY id`, [val]);
+     WHERE (','||${col}||',') LIKE '%,'||?||',%'
+     ORDER BY area * CASE
+       WHEN color = 0 THEN 0.36
+       WHEN color = 1 THEN MIN(0.42 + 0.008 * COALESCE(colors, 2), 0.51)
+       ELSE 0.36 END DESC, id`, [val]);
   renderSolver();
 }
 function solverNotDone() { return solverQueue.filter(r => !doneSet.has(r.id)); }
