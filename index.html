@@ -49,6 +49,13 @@
   #stats-view { display:none; margin-top:10px; }
   #credits-view { display:none; margin-top:10px; }
   #about-view { display:none; margin-top:10px; }
+  #solver-view { display:none; margin-top:10px; }
+  .solver-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+  .srow { display:flex; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--line); max-width:900px; }
+  .srow .sid { font-variant-numeric:tabular-nums; color:var(--muted); }
+  .srow .sname { flex:1; }
+  .srow .smeta { color:var(--muted); font-size:12px; }
+  .srow .scopy { font:inherit; font-size:12px; padding:2px 8px; cursor:pointer; }
   #about-view h2 { font-size:15px; margin:18px 0 6px; }
   #about-view p, #about-view li { color:var(--muted); }
   #about-view b { color:var(--text); }
@@ -92,6 +99,7 @@
     <button id="nav-stats">Stats</button>
     <button id="nav-credits">Credits</button>
     <button id="nav-about">About</button>
+    <button id="nav-solver">Solver</button>
   </div>
   <div id="browse-controls">
     <div class="controls">
@@ -209,6 +217,33 @@
   <div id="stats-view"></div>
   <div id="credits-view"></div>
   <div id="about-view"></div>
+  <div id="solver-view">
+    <div class="solver-head">
+      <label>list <select id="solver-list">
+        <option value="">pick a list…</option>
+        <optgroup label="community">
+          <option value="191904">high-XP 3k+</option>
+          <option value="238184">B/W &gt;2k</option>
+          <option value="237942">second tier</option>
+          <option value="187784">easy 60 MP</option>
+          <option value="233518">easy 60 MP 2</option>
+          <option value="187748">48 MP</option>
+          <option value="191702">MP list</option>
+        </optgroup>
+        <optgroup label="wiki">
+          <option value="xpc">XP color (3k+)</option>
+          <option value="xpbw">XP B/W (&gt;2k)</option>
+          <option value="xpco25">XP color other (2.5–3k)</option>
+          <option value="xpco0">XP color other (&lt;2.5k)</option>
+          <option value="xpbwo">XP B/W other</option>
+          <option value="mp60">Easy 60 MP</option>
+          <option value="mpo">Easy other</option>
+        </optgroup>
+      </select></label>
+      <span id="solver-remaining" style="color:var(--muted)"></span>
+    </div>
+    <div id="solver-rows"></div>
+  </div>
 </main>
 <div id="detail"><div class="card">
   <button class="close" onclick="closeDetail()">×</button>
@@ -385,15 +420,18 @@ function setView(v) {
   document.getElementById('nav-stats').classList.toggle('active', v === 'stats');
   document.getElementById('nav-credits').classList.toggle('active', v === 'credits');
   document.getElementById('nav-about').classList.toggle('active', v === 'about');
+  document.getElementById('nav-solver').classList.toggle('active', v === 'solver');
   document.getElementById('browse-controls').style.display = v === 'browse' ? '' : 'none';
   document.getElementById('browse-view').style.display = v === 'browse' ? '' : 'none';
   document.getElementById('stats-view').style.display = v === 'stats' ? 'block' : 'none';
   document.getElementById('credits-view').style.display = v === 'credits' ? 'block' : 'none';
   document.getElementById('about-view').style.display = v === 'about' ? 'block' : 'none';
+  document.getElementById('solver-view').style.display = v === 'solver' ? 'block' : 'none';
   document.getElementById('banner').style.display = 'none';
   document.getElementById('more').style.display = 'none';
   if (v === 'credits') { loadCredits().then(renderCredits); return; }
   if (v === 'about') { renderAbout(); return; }
+  if (v === 'solver') { return; }
   refresh();
 }
 
@@ -401,6 +439,7 @@ document.getElementById('nav-browse').onclick = () => setView('browse');
 document.getElementById('nav-stats').onclick = () => setView('stats');
 document.getElementById('nav-credits').onclick = () => setView('credits');
 document.getElementById('nav-about').onclick = () => setView('about');
+document.getElementById('nav-solver').onclick = () => setView('solver');
 document.getElementById('more').onclick = render;
 document.getElementById('reset').onclick = () => {
   document.getElementById('q').value = '';
@@ -663,6 +702,48 @@ function renderAbout() {
       onclick="setView('credits'); return false;">Credits</a>).</p>
     </div>`;
 }
+
+// ---- solver (grind) ----
+let solverQueue = [];
+function selectSolverList() {
+  const val = document.getElementById('solver-list').value;
+  if (!val) { solverQueue = []; renderSolver(); return; }
+  const col = WIKI_LISTS[val] ? 'wiki_lists' : 'groups';
+  solverQueue = query(
+    `SELECT id, name, w, h, type, area, color, colors FROM puzzles
+     WHERE (','||${col}||',') LIKE '%,'||?||',%'
+       AND NOT EXISTS (SELECT 1 FROM done d WHERE d.id = puzzles.id)
+     ORDER BY id`, [val]);
+  renderSolver();
+}
+function renderSolver() {
+  const batch = solverQueue.slice(0, 10);
+  document.getElementById('solver-remaining').textContent =
+    solverQueue.length ? solverQueue.length + ' not done' : '';
+  document.getElementById('solver-rows').innerHTML = batch.map(r => {
+    const xp = xpEst(r);
+    return `<div class="srow">
+      <input type="checkbox" class="done-check" ${doneSet.has(r.id) ? 'checked' : ''} onchange="solverToggleDone(${r.id})">
+      <button class="scopy" onclick="solverCopy(this, ${r.id})">copy</button>
+      <span class="sid">#${r.id}</span>
+      <span class="sname">${esc(r.name)}</span>
+      <span class="smeta">${r.w}×${r.h} · ${esc(r.type)}${xp != null ? ' · ~' + xp.toLocaleString() + ' xp' : ''}</span>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);max-width:900px">all done 🎉 — pick another list</div>';
+}
+function solverToggleDone(id) {
+  if (doneSet.has(id)) doneSet.delete(id); else doneSet.add(id);
+  persistDone(); syncDoneTable(); updateDoneNote();
+  solverQueue = solverQueue.filter(x => x.id !== id);
+  renderSolver();
+}
+function solverCopy(btn, id) {
+  copyText('#' + id);
+  const old = btn.textContent;
+  btn.textContent = 'copied';
+  setTimeout(() => { btn.textContent = old; }, 1200);
+}
+document.getElementById('solver-list').addEventListener('change', selectSolverList);
 
 function copyText(t) {
   if (navigator.clipboard) { navigator.clipboard.writeText(t); return; }
